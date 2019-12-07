@@ -8,6 +8,9 @@ Python 3.x+ only!
 
 # Clone for local use:
 
+Clone repo:  
+`git clone <link>`
+
 Install pyppeteer:  
 `python3 -m pip install pyppeteer`  
 
