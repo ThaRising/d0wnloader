@@ -1,0 +1,6 @@
+*.env
+*.png
+.idea
+*.py
+!main2.py
+config.*
