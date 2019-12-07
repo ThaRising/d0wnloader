@@ -4,3 +4,5 @@
 *.py
 !main2.py
 config.*
+__pycache__
+*.pyc
