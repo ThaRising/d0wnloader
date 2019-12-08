@@ -7,6 +7,7 @@ from pyppeteer import launch
 from threading import Thread
 from queue import Queue
 from dotenv import load_dotenv
+import requests
 
 load_dotenv()
 
@@ -26,7 +27,7 @@ class PrepWorker():
         return page
 
     async def dispatcher(self):
-        browser = await launch()
+        browser = await launch({"headless": False})
         page = await PrepWorker.__prep(browser)
         return browser, page
 
@@ -36,13 +37,11 @@ class AuthWorker(Thread):
         Thread.__init__(self)
         self.queue = queue
         self.page = page
-        self.username = None
-        self.password = None
+        self.username = os.getenv("USR")
+        self.password = os.getenv("PWD")
         self.captcha = None
 
     async def login(self):
-        self.username = os.getenv("USR")
-        self.password = os.getenv("PWD")
         self.captcha = input("Enter the Captcha here: ")
         focusInput = await self.page.waitForXPath('//*[@id="overlay-box"]/div[1]/form/div[1]/input')
         await focusInput.type(self.username)
@@ -60,6 +59,30 @@ class AuthWorker(Thread):
         self.queue.put(nPage)
 
 
+class QueueCrawler(Thread):
+    def __init__(self, queue, page):
+        Thread.__init__(self)
+
+    def run(self):
+        pass
+
+    async def log(self):
+        async with open ("logfile.txt", "w+") as fin:
+            async for lines in fin:
+                pass
+
+
+class DonwloadWorker(Thread):
+    def __init__(self, queue):
+        Thread.__init__(self)
+
+    def run(self):
+        pass
+
+    def download(self):
+        pass
+
+
 class Gui():
     def __init__(self):
         self.authQueue = Queue()
@@ -70,13 +93,29 @@ class Gui():
         while True:
             try:
                 self.page = self.authQueue.get(0)
-                print("Authentication finished.")
+                print('Authentication finished - Thread 1 "AuthWorker()" destroyed.')
                 break
             except Queue.Empty:
                 continue
         asyncio.get_event_loop().run_until_complete(self.sc())
 
     async def sc(self):
+        ua = await self.browser.userAgent()
+        cookies = await self.page.cookies()
+        cookies = cookies[-1]
+        stream = requests.get("https://pr0gramm.com/api/items/get",
+                              params={"older": "3525673", "flags": "9", "likes": os.getenv("USR"), "self": "true"},
+                              headers={"accept": "application/json",
+                                       "user-agent": ua, "referer": os.getenv("MAIN_PAGE")},
+                              cookies={cookies.get("name"): cookies.get("value")})
+        if not stream.status_code == requests.codes.ok:
+            raise Exception('Request rejected by server, please restart the program and try again.')
+        ids = [n["id"] for n in stream.json()["items"]]
+        with open("logfile.txt","w+") as fout:
+            for items in ids:
+                fout.write("{}{}".format(items, "\n"))
+        await self.page.evaluate("""{window.scrollBy(0, document.body.scrollHeight);}""")
+        await asyncio.sleep(10)
         imgStream = await self.page.waitForXPath('//*[@id="stream"]')
         await imgStream.screenshot({'path': 'page.png'})
 
