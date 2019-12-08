@@ -93,7 +93,7 @@ class Gui():
         while True:
             try:
                 self.page = self.authQueue.get(0)
-                print('Authentication finished - Thread 1 "AuthWorker()" destroyed.')
+                print('Authentication finished - Thread 1: "AuthWorker()" destroyed.')
                 break
             except Queue.Empty:
                 continue
