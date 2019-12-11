@@ -7,3 +7,5 @@ config.*
 __pycache__
 *.pyc
 *.txt
+*.mp4
+*.jpg
