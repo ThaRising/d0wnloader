@@ -44,7 +44,13 @@ class AuthWorker(Thread):
         self.captcha = None
 
     async def login(self):
-        self.captcha = input("Enter the Captcha here: ")
+        while True:
+            try:
+                self.captcha = input("Enter the Captcha here: ")
+                assert len(self.captcha) >= 5
+                break
+            except AssertionError:
+                continue
         focusInput = await self.page.waitForXPath('//*[@id="overlay-box"]/div[1]/form/div[1]/input')
         await focusInput.type(self.username)
         focusInput = await self.page.waitForXPath('//*[@id="overlay-box"]/div[1]/form/div[2]/input')
@@ -57,7 +63,7 @@ class AuthWorker(Thread):
         return self.page
 
     def run(self):
-        asyncio.get_event_loop().run_until_complete(self.login())
+        return asyncio.get_event_loop().run_until_complete(self.login())
 
 
 class IdScraper(Thread):
@@ -123,14 +129,8 @@ class Gui():
         print("Dispatching PrepWorker() - Thread: NULL")
         self.browser, self.page = asyncio.get_event_loop().run_until_complete(PrepWorker.dispatcher())
         print("Dispatching AuthWorker() - Thread: 1")
-        AuthWorker(self.authQueue, self.page).run()
-        while True:
-            try:
-                self.page = self.authQueue.get(0)
-                print('Authentication finished - Thread 1: "AuthWorker()" destroyed.')
-                break
-            except Queue.Empty:
-                continue
+        self.page = AuthWorker(self.page).run()
+        print('Authentication finished - Thread 1: "AuthWorker()" destroyed.')
         IdScraper(self.browser, self.page).run()
         DownloadWorker(self.browser, self.page).run()
 
