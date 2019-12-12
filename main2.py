@@ -12,7 +12,6 @@ import wget
 from multiprocessing import Process, Queue
 
 load_dotenv()
-os.getenv
 
 
 class PrepWorker():
