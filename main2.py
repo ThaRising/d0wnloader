@@ -9,10 +9,10 @@ from dotenv import load_dotenv
 import requests
 from requests_futures.sessions import FuturesSession
 import wget
-from queue import Empty
 from multiprocessing import Process, Queue
 
 load_dotenv()
+os.getenv
 
 
 class PrepWorker():
