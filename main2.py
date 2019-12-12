@@ -5,11 +5,12 @@ import asyncio
 import os
 from pyppeteer import launch
 from threading import Thread
-from queue import Queue
 from dotenv import load_dotenv
 import requests
 from requests_futures.sessions import FuturesSession
 import wget
+from queue import Empty
+from multiprocessing import Process, Queue
 
 load_dotenv()
 
@@ -67,10 +68,11 @@ class AuthWorker(Thread):
 
 
 class IdScraper(Thread):
-    def __init__(self, browser, page):
+    def __init__(self, browser, page, queue):
         Thread.__init__(self)
         self.browser = browser
         self.page = page
+        self.queue = queue
 
     def run(self):
         asyncio.get_event_loop().run_until_complete(self.log())
@@ -91,6 +93,7 @@ class IdScraper(Thread):
                 ids = ["{}:{}".format(n["id"], n["image"]) for n in data.json()["items"]]
                 for item in ids:
                     fout.write("{}{}".format(item, "\n"))
+                    self.queue.put(item.split(":")[1].strip())
                 try:
                     while len(data.json()["items"]) > 0:
                         with FuturesSession(max_workers=4) as session:
@@ -104,36 +107,51 @@ class IdScraper(Thread):
                             ids = ["{}:{}".format(n["id"], n["image"]) for n in data.json()["items"]]
                             for item in ids:
                                 fout.write("{}{}".format(item, "\n"))
+                                self.queue.put(item.split(":")[1].strip())
                 finally:
+                    print('Service "IdScraper" finished. Thread destroyed.')
                     return 0
 
 
-class DownloadWorker(Thread):
-    def __init__(self, browser, page):
-        Thread.__init__(self)
-        self.browser = browser
-        self.page = page
+class DownloadWorker():
+    def __init__(self):
+        pass
 
-    def run(self) -> None:
-        asyncio.get_event_loop().run_until_complete(self.reqImg())
-
-    async def reqImg(self):
-        with open("logfile.txt", "r") as fin:
+    @staticmethod
+    def run(tasks) -> None:
+        while not tasks.empty():
+            task = tasks.get()
+            print("{}: {}".format("Downloading file", task))
             img = wget.download(
-                "{}/{}".format("https://img.pr0gramm.com", str(fin.readline().split(":")[1].strip())))
+                "{}/{}".format("https://img.pr0gramm.com", task))
 
 
 class Gui():
-    def __init__(self):
-        self.authQueue = Queue()
+    def __init__(self, queue):
+        global thread1, thread2, thread3, thread4
+        self.queue = queue
         print("Dispatching PrepWorker() - Thread: NULL")
         self.browser, self.page = asyncio.get_event_loop().run_until_complete(PrepWorker.dispatcher())
         print("Dispatching AuthWorker() - Thread: 1")
         self.page = AuthWorker(self.page).run()
         print('Authentication finished - Thread 1: "AuthWorker()" destroyed.')
-        IdScraper(self.browser, self.page).run()
-        DownloadWorker(self.browser, self.page).run()
+        print('Dispatching IdScraper() - Thread: 1')
+        IdScraper(self.browser, self.page, self.queue).run()
+        print("Dispatching DownloadWorker() Threads 1 - 4")
+        thread1.start()
+        thread2.start()
+        thread3.start()
+        thread4.start()
 
 
-if __name__=="__main__":
-    Gui()
+if __name__ == "__main__":
+    tasks = Queue()
+    thread1 = Process(target=DownloadWorker.run, args=((tasks),))
+    thread1.daemon = True
+    thread2 = Process(target=DownloadWorker.run, args=((tasks),))
+    thread2.daemon = True
+    thread3 = Process(target=DownloadWorker.run, args=((tasks),))
+    thread3.daemon = True
+    thread4 = Process(target=DownloadWorker.run, args=((tasks),))
+    thread4.daemon = True
+    Gui(tasks)
