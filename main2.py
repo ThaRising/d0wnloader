@@ -61,6 +61,7 @@ class AuthWorker(Thread):
         focusInput = await self.page.waitForXPath('//*[@id="login-button"]')
         await focusInput.click()
         await asyncio.sleep(1)
+        print('Authentication finished - Thread 1: "AuthWorker()" destroyed.')
         return self.page
 
     def run(self):
@@ -134,7 +135,6 @@ class Gui():
         self.browser, self.page = asyncio.get_event_loop().run_until_complete(PrepWorker.dispatcher())
         print("Dispatching AuthWorker() - Thread: 1")
         self.page = AuthWorker(self.page).run()
-        print('Authentication finished - Thread 1: "AuthWorker()" destroyed.')
         print('Dispatching IdScraper() - Thread: 1')
         IdScraper(self.browser, self.page, self.queue).run()
         print("Dispatching DownloadWorker() Threads 1 - 4")
@@ -142,6 +142,10 @@ class Gui():
         thread2.start()
         thread3.start()
         thread4.start()
+        thread1.join()
+        thread2.join()
+        thread3.join()
+        thread4.join()
 
 
 if __name__ == "__main__":
