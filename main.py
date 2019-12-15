@@ -5,7 +5,7 @@ import asyncio
 import os
 from pyppeteer import launch
 from dotenv import load_dotenv
-from multiprocessing import Process, Queue
+from multiprocessing import Queue
 import processes
 import gui
 
@@ -20,7 +20,7 @@ class Gui(gui.App):
 
 
 async def prep():
-    browser = await launch({"headless": False})
+    browser = await launch({"headless": True})
     page = await browser.newPage()
     await page.goto(os.getenv("MAIN_PAGE"), {"waitUntil": "networkidle2"})
     loginHandle = await page.J(".head-link")
@@ -36,5 +36,4 @@ if __name__ == "__main__":
     for thread in threads:
         thread.daemon = True
         thread.start()
-        #thread.join()
     Gui()
