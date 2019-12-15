@@ -1,11 +1,13 @@
+# Exclude Config files
 *.env
-*.png
 .idea
-*.py
-!main2.py
-config.*
+
+# Exclude compiled files
 __pycache__
 *.pyc
+
+# Exclude downloaded testdata
+*.png
 *.txt
 *.mp4
 *.jpg
