@@ -4,9 +4,9 @@
 from multiprocessing import Process
 from requests_futures.sessions import FuturesSession
 import asyncio
-import os
 import requests
 import wget
+import os
 
 
 class AuthWorker():
@@ -31,10 +31,11 @@ class AuthWorker():
 
 
 class IdScraper:
-    def __init__(self, queue, browser, page):
+    def __init__(self, queue, browser, page, user):
         self.queue = queue
         self.browser = browser
         self.page = page
+        self.username = user
 
     def run(self) -> None:
         asyncio.get_event_loop().run_until_complete(self.reqIds())
@@ -45,9 +46,9 @@ class IdScraper:
         if not os.path.isfile("logfile.txt"):
             with open("logfile.txt", "w+") as fout:
                 data = requests.get("https://pr0gramm.com/api/items/get",
-                                    params={"flags": "9", "likes": os.getenv("USR"), "self": "true"},
+                                    params={"flags": "9", "likes": self.username, "self": "true"},
                                     headers={"accept": "application/json",
-                                             "user-agent": ua, "referer": os.getenv("MAIN_PAGE")},
+                                             "user-agent": ua, "referer": "https://pr0gramm.com/user/{}/likes".format(self.username)},
                                     cookies={cookies[-1].get("name"): cookies[-1].get("value")})
                 if not data.status_code == requests.codes.ok:
                     raise Exception('Request rejected by server, please restart the program and try again.')
@@ -60,9 +61,9 @@ class IdScraper:
                         with FuturesSession(max_workers=4) as session:
                             data = session.get("https://pr0gramm.com/api/items/get",
                                                params={"older": str(int(ids[-1].split(":")[0]) - 120), "flags": "9",
-                                                       "likes": os.getenv("USR"), "self": "true"},
+                                                       "likes": self.username, "self": "true"},
                                                headers={"accept": "application/json", "user-agent": ua,
-                                                        "referer": os.getenv("MAIN_PAGE")},
+                                                        "referer": "https://pr0gramm.com/user/{}/likes".format(self.username)},
                                                cookies={cookies[-1].get("name"): cookies[-1].get("value")})
                             data = data.result()
                             ids = ["{}:{}".format(n["id"], n["image"]) for n in data.json()["items"]]
