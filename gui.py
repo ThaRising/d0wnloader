@@ -46,6 +46,3 @@ class App(tk.Tk):
     def startAuth(self):
         processes.AuthWorker(self.page).run(self.username.get(), self.password.get(), self.captcha.get())
         processes.IdScraper(self.queue, self.browser, self.page).run()
-
-if __name__ == '__main__':
-    App()

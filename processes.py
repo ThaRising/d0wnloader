@@ -80,7 +80,6 @@ class DownloadWorker(Process):
         super(DownloadWorker, self).__init__()
 
     def run(self) -> None:
-        print("Entered Run")
         while True:
             if not self.tasks.empty():
                 break

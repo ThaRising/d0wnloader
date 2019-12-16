@@ -11,3 +11,8 @@ __pycache__
 *.txt
 *.mp4
 *.jpg
+
+# Exclude build files
+*.spec
+build
+dist
