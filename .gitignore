@@ -16,3 +16,6 @@ __pycache__
 *.spec
 build
 dist
+
+# Reinclude requirements.txt
+!requirements.txt
