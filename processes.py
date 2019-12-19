@@ -73,6 +73,30 @@ class IdScraper:
                 finally:
                     print('Service "IdScraper" finished. Thread destroyed.')
                     return 0
+        else:
+            with open("logfile.txt", "r+") as fin:
+                data = requests.get("https://pr0gramm.com/api/items/get",
+                                    params={"flags": "9", "likes": self.username, "self": "true"},
+                                    headers={"accept": "application/json",
+                                             "user-agent": ua, "referer": "https://pr0gramm.com/user/{}/likes".format(self.username)},
+                                    cookies={cookies[-1].get("name"): cookies[-1].get("value")})
+                if not data.status_code == requests.codes.ok:
+                    raise Exception('Request rejected by server, please restart the program and try again.')
+                chk = [str(n["id"]) for n in data.json()["items"]]
+                img = [n["image"] for n in data.json()["items"]]
+                test = []
+                # Stage 1:
+                def check(data):
+                    for lines in fin:
+                        if lines.split(":")[0].strip() == data.strip():
+                            return data.strip()
+                for data in chk:
+                    a = check(data)
+                    if a:
+                        test.append(check(data))
+                # Stage 2:
+                #test.sort()
+                print(len(test))
 
 
 class DownloadWorker(Process):
