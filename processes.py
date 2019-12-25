@@ -47,6 +47,7 @@ class IdScraper:
         async def setVars():
             self.ua = await self.browser.userAgent()
             self.cookies = await self.page.cookies()
+
         asyncio.get_event_loop().run_until_complete(setVars())
         if os.path.isfile("logfile.txt"):
             asyncio.get_event_loop().run_until_complete(self.readLogfile())
@@ -61,48 +62,42 @@ class IdScraper:
                                      "referer": "https://pr0gramm.com/user/{}/likes".format(self.username)},
                             cookies={self.cookies[-1].get("name"): self.cookies[-1].get("value")})
 
+    def formatData(self, fout: any, data: requests.get) -> int:
+        if not data.status_code == requests.codes.ok:
+            raise Exception('Request rejected by server, please restart the program and try again.')
+        ids, imageNames = [[str(n["id"]) for n in data.json()["items"]], [n["image"] for n in data.json()["items"]]]
+        for i in range(0, len(ids)):
+            fout.write("{}:{}{}".format(ids[i], imageNames[i], "\n"))
+            self.queue.put(imageNames[i])
+        return int(ids[-1])
+
     async def writeLogfile(self) -> None:
         with open("logfile.txt", "w+") as fout:
-
-            data = self.getFirstItems()
-            if not data.status_code == requests.codes.ok:
-                raise Exception('Request rejected by server, please restart the program and try again.')
-
-            ids = ["{}:{}".format(n["id"], n["image"]) for n in data.json()["items"]]
-            for item in ids:
-                fout.write("{}{}".format(item, "\n"))
-                self.queue.put(item.split(":")[1].strip())
-
+            lastId = self.formatData(fout, self.getFirstItems())
             try:
                 while len(data.json()["items"]) > 0:
                     with FuturesSession(max_workers=4) as session:
-
                         data = session.get("https://pr0gramm.com/api/items/get",
-                                           params={"older": str(int(ids[-1].split(":")[0]) - 120), "flags": "9",
+                                           params={"older": lastId - 120, "flags": "9",
                                                    "likes": self.username, "self": "true"},
                                            headers={"accept": "application/json", "user-agent": self.ua,
                                                     "referer": "https://pr0gramm.com/user/{}/likes".format(
                                                         self.username)},
-                                           cookies={self.cookies[-1].get("name"): self.cookies[-1].get("value")})
-                        data = data.result()
-
-                        ids = ["{}:{}".format(n["id"], n["image"]) for n in data.json()["items"]]
-                        for item in ids:
-                            fout.write("{}{}".format(item, "\n"))
-                            self.queue.put(item.split(":")[1].strip())
-
+                                           cookies={
+                                               self.cookies[-1].get("name"): self.cookies[-1].get("value")}).result()
+                        self.formatData(fout, data)
             finally:
                 print('Service "IdScraper" finished. Thread destroyed.')
                 return
 
     async def readLogfile(self) -> None:
-
         with open("logfile.txt", "r+") as fin:
             data = self.getFirstItems().json()["items"]
-            id, img = [[str(n["id"]) for n in data], [str(n["image"]) for n in data]]
-            elems = [n.split(":")[1].strip() for n in fin.readlines()]
-            for item in [n for n in img if n not in elems]:
-                self.queue.put(item)
+            ids, imageNames = [[str(n["id"]) for n in data], [str(n["image"]) for n in data]]
+            logfileData = [n.split(":")[1].strip() for n in fin.readlines()]
+            differentials = [n for n in imageNames if n not in logfileData]
+            for ids in differentials:
+                self.queue.put(ids)
 
 
 class DownloadWorker(Process):
