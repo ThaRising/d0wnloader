@@ -3,6 +3,7 @@
 
 from multiprocessing import Process
 from requests_futures.sessions import FuturesSession
+from pathlib import Path
 import asyncio
 import requests
 import wget
@@ -47,12 +48,12 @@ class IdScraper:
         async def setVars():
             self.ua = await self.browser.userAgent()
             self.cookies = await self.page.cookies()
-
         asyncio.get_event_loop().run_until_complete(setVars())
         if os.path.isfile("logfile.txt"):
-            asyncio.get_event_loop().run_until_complete(self.readLogfile())
+            asyncio.get_event_loop().run_until_complete(self.getItemsNotInLog())
         else:
-            asyncio.get_event_loop().run_until_complete(self.writeLogfile())
+            asyncio.get_event_loop().run_until_complete(self.getAllItems())
+            Path('logfile.txt').touch()
 
     def getFirstItems(self) -> requests.get:
         return requests.get("https://pr0gramm.com/api/items/get",
@@ -62,42 +63,57 @@ class IdScraper:
                                      "referer": "https://pr0gramm.com/user/{}/likes".format(self.username)},
                             cookies={self.cookies[-1].get("name"): self.cookies[-1].get("value")})
 
-    def formatData(self, fout: any, data: requests.get) -> int:
-        if not data.status_code == requests.codes.ok:
-            raise Exception('Request rejected by server, please restart the program and try again.')
-        ids, imageNames = [[str(n["id"]) for n in data.json()["items"]], [n["image"] for n in data.json()["items"]]]
-        for i in range(0, len(ids)):
-            fout.write("{}:{}{}".format(ids[i], imageNames[i], "\n"))
-            self.queue.put(imageNames[i])
-        return int(ids[-1])
+    def getItemsOlderThanX(self, session: FuturesSession, lastChecked: int) -> requests.get:
+        return session.get("https://pr0gramm.com/api/items/get",
+                           params={"older": lastChecked - 120, "flags": "9",
+                                   "likes": self.username, "self": "true"},
+                           headers={"accept": "application/json", "user-agent": self.ua,
+                                    "referer": "https://pr0gramm.com/user/{}/likes".format(
+                                        self.username)},
+                           cookies={
+                               self.cookies[-1].get("name"): self.cookies[-1].get("value")}).result()
 
-    async def writeLogfile(self) -> None:
-        with open("logfile.txt", "w+") as fout:
-            lastId = self.formatData(fout, self.getFirstItems())
-            try:
+    async def getAllItems(self) -> None:
+
+        def filterData(data: requests.get) -> int:
+            ids, imageNames = [[str(n["id"]) for n in data.json()["items"]], [n["image"] for n in data.json()["items"]]]
+            for images in imageNames:
+                self.queue.put(images)
+            return int(ids[-1])
+
+        lastId = filterData(self.getFirstItems())
+        try:
+            with FuturesSession(max_workers=4) as session:
                 while len(data.json()["items"]) > 0:
-                    with FuturesSession(max_workers=4) as session:
-                        data = session.get("https://pr0gramm.com/api/items/get",
-                                           params={"older": lastId - 120, "flags": "9",
-                                                   "likes": self.username, "self": "true"},
-                                           headers={"accept": "application/json", "user-agent": self.ua,
-                                                    "referer": "https://pr0gramm.com/user/{}/likes".format(
-                                                        self.username)},
-                                           cookies={
-                                               self.cookies[-1].get("name"): self.cookies[-1].get("value")}).result()
-                        self.formatData(fout, data)
+                    data = self.getItemsOlderThanX(session, lastId)
+                    if not data.status_code == requests.codes.ok:
+                        raise Exception('Request rejected by server, please restart the program and try again.')
+                    lastId = filterData(data)
+        finally:
+            print('Service "IdScraper" finished. Thread destroyed.')
+            return
+
+    async def getItemsNotInLog(self) -> None:
+
+        def checkDifferentials(requestedData: requests.get, fileIn: any) -> int:
+            ids, imageNames = [[str(n["id"]) for n in requestedData], [str(n["image"]) for n in requestedData]]
+            logfileIds = [n.strip() for n in fileIn.readlines()]
+            differentials = [m for n, m in zip(ids, imageNames) if n not in logfileIds]
+            for imgNames in differentials:
+                self.queue.put(imgNames)
+            return int(logfileIds[-1])
+
+        with open("logfile.txt", "r+") as fin:
+            data = self.getFirstItems().json()["items"]
+            lastId = checkDifferentials(data, fin)
+            try:
+                with FuturesSession(max_workers=4) as session:
+                    while len(data.json()["items"]) > 0:
+                        data = self.getItemsOlderThanX(session, lastId)
+                        lastId = checkDifferentials(data, fin)
             finally:
                 print('Service "IdScraper" finished. Thread destroyed.')
                 return
-
-    async def readLogfile(self) -> None:
-        with open("logfile.txt", "r+") as fin:
-            data = self.getFirstItems().json()["items"]
-            ids, imageNames = [[str(n["id"]) for n in data], [str(n["image"]) for n in data]]
-            logfileData = [n.split(":")[1].strip() for n in fin.readlines()]
-            differentials = [n for n in imageNames if n not in logfileData]
-            for ids in differentials:
-                self.queue.put(ids)
 
 
 class DownloadWorker(Process):
@@ -110,4 +126,7 @@ class DownloadWorker(Process):
             if not self.queue.empty():
                 break
         while not self.queue.empty():
-            wget.download("{}/{}".format("https://img.pr0gramm.com", self.queue.get()))
+            with open("logfile.txt", "w") as fout:
+                currentItem = self.queue.get()
+                wget.download("{}/{}".format("https://img.pr0gramm.com", currentItem))
+                fout.write("{}{}".format(currentItem, "\n"))
