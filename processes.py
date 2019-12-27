@@ -73,44 +73,42 @@ class IdScraper:
                            cookies={
                                self.cookies[-1].get("name"): self.cookies[-1].get("value")}).result()
 
+    def filterData(self, data: requests.get) -> int:
+        ids, imageNames = [[str(n["id"]) for n in data.json()["items"]], [n["image"] for n in data.json()["items"]]]
+        for images in imageNames:
+            self.queue.put(images)
+        return int(ids[-1])
+
     async def getAllItems(self) -> None:
-
-        def filterData(data: requests.get) -> int:
-            ids, imageNames = [[str(n["id"]) for n in data.json()["items"]], [n["image"] for n in data.json()["items"]]]
-            for images in imageNames:
-                self.queue.put(images)
-            return int(ids[-1])
-
-        lastId = filterData(self.getFirstItems())
+        lastId = self.filterData(self.getFirstItems())
         try:
             with FuturesSession(max_workers=4) as session:
                 while len(data.json()["items"]) > 0:
                     data = self.getItemsOlderThanX(session, lastId)
                     if not data.status_code == requests.codes.ok:
                         raise Exception('Request rejected by server, please restart the program and try again.')
-                    lastId = filterData(data)
+                    lastId = self.filterData(data)
         finally:
             print('Service "IdScraper" finished. Thread destroyed.')
             return
 
+    def checkDifferentials(self, requestedData: requests.get, fileIn: any) -> int:
+        ids, imageNames = [[str(n["id"]) for n in requestedData], [str(n["image"]) for n in requestedData]]
+        logfileIds = [n.strip() for n in fileIn.readlines()]
+        differentials = [m for n, m in zip(ids, imageNames) if n not in logfileIds]
+        for imgNames in differentials:
+            self.queue.put(imgNames)
+        return int(logfileIds[-1])
+
     async def getItemsNotInLog(self) -> None:
-
-        def checkDifferentials(requestedData: requests.get, fileIn: any) -> int:
-            ids, imageNames = [[str(n["id"]) for n in requestedData], [str(n["image"]) for n in requestedData]]
-            logfileIds = [n.strip() for n in fileIn.readlines()]
-            differentials = [m for n, m in zip(ids, imageNames) if n not in logfileIds]
-            for imgNames in differentials:
-                self.queue.put(imgNames)
-            return int(logfileIds[-1])
-
         with open("logfile.txt", "r+") as fin:
             data = self.getFirstItems().json()["items"]
-            lastId = checkDifferentials(data, fin)
+            lastId = self.checkDifferentials(data, fin)
             try:
                 with FuturesSession(max_workers=4) as session:
                     while len(data.json()["items"]) > 0:
                         data = self.getItemsOlderThanX(session, lastId)
-                        lastId = checkDifferentials(data, fin)
+                        lastId = self.checkDifferentials(data, fin)
             finally:
                 print('Service "IdScraper" finished. Thread destroyed.')
                 return
