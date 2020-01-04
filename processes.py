@@ -45,15 +45,16 @@ class IdScraper:
         self.run()
 
     def run(self) -> None:
-        async def setVars():
-            self.ua = await self.browser.userAgent()
-            self.cookies = await self.page.cookies()
-        asyncio.get_event_loop().run_until_complete(setVars())
+        asyncio.get_event_loop().run_until_complete(self.setVars())
         if os.path.isfile("logfile.txt"):
             asyncio.get_event_loop().run_until_complete(self.getItemsNotInLog())
         else:
-            asyncio.get_event_loop().run_until_complete(self.getAllItems())
             Path('logfile.txt').touch()
+            asyncio.get_event_loop().run_until_complete(self.getAllItems())
+
+    async def setVars(self):
+        self.ua = await self.browser.userAgent()
+        self.cookies = await self.page.cookies()
 
     def getFirstItems(self) -> requests.get:
         return requests.get("https://pr0gramm.com/api/items/get",
@@ -77,13 +78,16 @@ class IdScraper:
         ids, imageNames = [[str(n["id"]) for n in data.json()["items"]], [n["image"] for n in data.json()["items"]]]
         for images in imageNames:
             self.queue.put(images)
+        with open("logfile.txt", "a") as fout:
+            for thisId in ids:
+                fout.write("{}{}".format(thisId, "\n"))
         return int(ids[-1])
 
     async def getAllItems(self) -> None:
         lastId = self.filterData(self.getFirstItems())
         try:
-            with FuturesSession(max_workers=4) as session:
-                while len(data.json()["items"]) > 0:
+            while len(data.json()["items"]) > 0:
+                with FuturesSession(max_workers=4) as session:
                     data = self.getItemsOlderThanX(session, lastId)
                     if not data.status_code == requests.codes.ok:
                         raise Exception('Request rejected by server, please restart the program and try again.')
@@ -95,9 +99,13 @@ class IdScraper:
     def checkDifferentials(self, requestedData: requests.get, fileIn: any) -> int:
         ids, imageNames = [[str(n["id"]) for n in requestedData], [str(n["image"]) for n in requestedData]]
         logfileIds = [n.strip() for n in fileIn.readlines()]
-        differentials = [m for n, m in zip(ids, imageNames) if n not in logfileIds]
-        for imgNames in differentials:
+        differentialIds, differentialImgs = [[n for n, m in zip(ids, imageNames) if n not in logfileIds],
+                                             [m for n, m in zip(ids, imageNames) if n not in logfileIds]]
+        for imgNames in differentialImgs:
             self.queue.put(imgNames)
+        with open("logfile.txt", "a") as fout:
+            for ids in differentialIds:
+                fout.write("{}{}".format(ids, "\n"))
         return int(logfileIds[-1])
 
     async def getItemsNotInLog(self) -> None:
@@ -124,7 +132,4 @@ class DownloadWorker(Process):
             if not self.queue.empty():
                 break
         while not self.queue.empty():
-            with open("logfile.txt", "w") as fout:
-                currentItem = self.queue.get()
-                wget.download("{}/{}".format("https://img.pr0gramm.com", currentItem))
-                fout.write("{}{}".format(currentItem, "\n"))
+            wget.download("{}/{}".format("https://img.pr0gramm.com", self.queue.get()))
