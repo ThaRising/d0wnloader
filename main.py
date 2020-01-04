@@ -8,13 +8,6 @@ import processes
 import gui
 
 
-class Gui(gui.App):
-    def __init__(self):
-        global page, browser, tasks
-        gui.App.__init__(self, page, browser, tasks)
-        self.mainloop()
-
-
 async def prep():
     browser = await launch({"headless": True})
     page = await browser.newPage()
@@ -33,4 +26,4 @@ if __name__ == "__main__":
     for thread in threads:
         thread.daemon = True
         thread.start()
-    Gui()
+    gui.App(page, browser, tasks).mainloop()

@@ -11,11 +11,15 @@ __pycache__
 *.txt
 *.mp4
 *.jpg
+*.tmp
 
 # Exclude build files
 *.spec
 build
 dist
+
+# Exclude scripts
+*.bat
 
 # Reinclude requirements.txt
 !requirements.txt

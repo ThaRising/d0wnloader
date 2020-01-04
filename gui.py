@@ -51,5 +51,5 @@ class App(tk.Tk):
         self.login.pack(side=tk.TOP, anchor=tk.W, ipady=3, ipadx=2)
 
     def startAuth(self):
-        processes.AuthWorker(self.page).run(self.username.get(), self.password.get(), self.captcha.get())
-        processes.IdScraper(self.queue, self.browser, self.page, self.username.get()).run()
+        processes.AuthWorker(self.page, self.username.get(), self.password.get(), self.captcha.get())
+        processes.IdScraper(self.queue, self.browser, self.page, self.username.get())
