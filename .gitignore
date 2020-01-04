@@ -18,5 +18,8 @@ __pycache__
 build
 dist
 
+# Exclude scripts
+*.bat
+
 # Reinclude requirements.txt
 !requirements.txt
