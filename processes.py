@@ -1,7 +1,7 @@
 # !python3
 # -*- coding: utf-8 -*-
 
-from multiprocessing import Process
+from multiprocessing.context import Process
 from requests_futures.sessions import FuturesSession
 from pathlib import Path
 import asyncio
