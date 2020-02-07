@@ -3,14 +3,13 @@
 
 import tkinter as tk
 from PIL import ImageTk, Image
-import processes
+from processes import IdScraper
+import services
 
 
 class App(tk.Tk):
     def __init__(self, page, browser, queue):
         tk.Tk.__init__(self)
-        self.page = page
-        self.browser = browser
         self.queue = queue
         self.username = tk.StringVar()
         self.password = tk.StringVar()
@@ -51,5 +50,6 @@ class App(tk.Tk):
         self.login.pack(side=tk.TOP, anchor=tk.W, ipady=3, ipadx=2)
 
     def startAuth(self):
-        processes.AuthWorker(self.page, self.username.get(), self.password.get(), self.captcha.get())
-        processes.IdScraper(self.queue, self.browser, self.page, self.username.get())
+        services.username = self.username.get()
+        services.cookies = services.login(self.password.get(), self.captcha.get())
+        IdScraper(self.queue)

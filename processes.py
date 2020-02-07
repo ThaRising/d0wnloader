@@ -8,40 +8,12 @@ import asyncio
 import requests
 import wget
 import os
-
-
-class AuthWorker:
-    def __init__(self, page: any, username: str, password: str, captcha: str) -> None:
-        self.page = page
-        self.username = username
-        self.password = password
-        self.captcha = captcha
-        self.run()
-
-    def run(self) -> None:
-        asyncio.get_event_loop().run_until_complete(self.login())
-        print('Authentication finished - Thread 1: "AuthWorker()" destroyed.')
-
-    async def login(self) -> None:
-        focusInput = await self.page.waitForXPath('//*[@id="overlay-box"]/div[1]/form/div[1]/input')
-        await focusInput.type(self.username)
-        focusInput = await self.page.waitForXPath('//*[@id="overlay-box"]/div[1]/form/div[2]/input')
-        await focusInput.type(self.password)
-        focusInput = await self.page.waitForXPath('//*[@id="overlay-box"]/div[1]/form/div[4]/input[1]')
-        await focusInput.type(self.captcha)
-        focusInput = await self.page.waitForXPath('//*[@id="login-button"]')
-        await focusInput.click()
-        await asyncio.sleep(1)
+import services
 
 
 class IdScraper:
-    def __init__(self, queue: any, browser: any, page: any, username: str) -> None:
+    def __init__(self, queue: any) -> None:
         self.queue = queue
-        self.browser = browser
-        self.page = page
-        self.username = username
-        self.ua = None
-        self.cookies = None
         self.run()
 
     def run(self) -> None:
@@ -51,28 +23,6 @@ class IdScraper:
         else:
             Path('logfile.txt').touch()
             asyncio.get_event_loop().run_until_complete(self.getAllItems())
-
-    async def setVars(self):
-        self.ua = await self.browser.userAgent()
-        self.cookies = await self.page.cookies()
-
-    def getFirstItems(self) -> requests.get:
-        return requests.get("https://pr0gramm.com/api/items/get",
-                            params={"flags": "9", "likes": self.username, "self": "true"},
-                            headers={"accept": "application/json",
-                                     "user-agent": self.ua,
-                                     "referer": "https://pr0gramm.com/user/{}/likes".format(self.username)},
-                            cookies={self.cookies[-1].get("name"): self.cookies[-1].get("value")})
-
-    def getItemsOlderThanX(self, session: FuturesSession, lastChecked: int) -> requests.get:
-        return session.get("https://pr0gramm.com/api/items/get",
-                           params={"older": lastChecked - 120, "flags": "9",
-                                   "likes": self.username, "self": "true"},
-                           headers={"accept": "application/json", "user-agent": self.ua,
-                                    "referer": "https://pr0gramm.com/user/{}/likes".format(
-                                        self.username)},
-                           cookies={
-                               self.cookies[-1].get("name"): self.cookies[-1].get("value")}).result()
 
     def filterData(self, data: requests.get) -> int:
         ids, imageNames = [[str(n["id"]) for n in data.json()["items"]], [n["image"] for n in data.json()["items"]]]
