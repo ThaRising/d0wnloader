@@ -3,7 +3,8 @@
 
 import asyncio
 from pyppeteer import launch
-from multiprocessing import Queue, freeze_support
+from multiprocessing.queues import Queue
+from multiprocessing.spawn import freeze_support
 import processes
 import gui
 
