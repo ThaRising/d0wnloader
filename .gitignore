@@ -1,6 +1,7 @@
 # Exclude Config files
 *.env
 .idea
+venv
 
 # Exclude compiled files
 __pycache__
