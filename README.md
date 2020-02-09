@@ -5,7 +5,7 @@ Saved post downloader for the imageboard pr0gramm.com, using Selenium and reques
 ### Compatibility:
 
 Tested on Python 3.7.2  
-Should support Python 3.2+
+Should support Python 3.4+
 
 # Clone for local use:
 
