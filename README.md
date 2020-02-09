@@ -15,5 +15,8 @@ Clone repo:
 Install dependencies:   
 `pip install -r requirements.txt`  
 
+Install dependencies via Anaconda:  
+`conda env update --file environment.yml`
+
 Run main.py as the entry point and you are good to go!  
 Alternatively you can download the working .exe versions from the **Releases** section.
