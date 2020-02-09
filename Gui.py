@@ -3,14 +3,16 @@
 
 import tkinter as tk
 from PIL import ImageTk, Image
-from processes import IdScraper
-import services
+import processes
+from asyncio import get_event_loop
 
 
-class App(tk.Tk):
-    def __init__(self, page, browser, queue):
-        tk.Tk.__init__(self)
+class Gui(tk.Tk):
+    def __init__(self, browser: any, queue: any):
+        self.browser = browser
         self.queue = queue
+
+        tk.Tk.__init__(self)
         self.username = tk.StringVar()
         self.password = tk.StringVar()
         self.captcha = tk.StringVar()
@@ -50,6 +52,7 @@ class App(tk.Tk):
         self.login.pack(side=tk.TOP, anchor=tk.W, ipady=3, ipadx=2)
 
     def startAuth(self):
-        services.username = self.username.get()
-        services.cookies = services.login(self.password.get(), self.captcha.get())
-        IdScraper(self.queue)
+        username = self.username.get()
+        get_event_loop().run_until_complete(
+            self.browser.login(username, self.password.get(), self.captcha.get()))
+        processes.IdScraper(self.queue, self.browser, username)
