@@ -1,44 +1,43 @@
 # !python3
 # -*- coding: utf-8 -*-
 
-from multiprocessing.context import Process
+import multiprocessing
 from requests_futures.sessions import FuturesSession
 from pathlib import Path
-import asyncio
+from asyncio import get_event_loop
 import requests
 import wget
 import os
 import services
+import threading
 
 
 class IdScraper:
-    def __init__(self, queue: any) -> None:
+    def __init__(self, queue: multiprocessing.Queue, browser: any, username: str) -> None:
         self.queue = queue
-        self.run()
+        self.browser = browser
+        self.username = username
+        self.running: bool = True
+        self.thread = threading.Thread(target=self.run)
 
     def run(self) -> None:
-        asyncio.get_event_loop().run_until_complete(self.setVars())
+        """Either creates a new logfile or reads an existing one"""
         if os.path.isfile("logfile.txt"):
-            asyncio.get_event_loop().run_until_complete(self.getItemsNotInLog())
+            get_event_loop().run_until_complete(self.getItemsNotInLog())
         else:
             Path('logfile.txt').touch()
-            asyncio.get_event_loop().run_until_complete(self.getAllItems())
-
-    def filterData(self, data: requests.get) -> int:
-        ids, imageNames = [[str(n["id"]) for n in data.json()["items"]], [n["image"] for n in data.json()["items"]]]
-        for images in imageNames:
-            self.queue.put(images)
-        with open("logfile.txt", "a") as fout:
-            for thisId in ids:
-                fout.write("{}{}".format(thisId, "\n"))
-        return int(ids[-1])
+            get_event_loop().run_until_complete(self.getAllItems())
 
     async def getAllItems(self) -> None:
-        lastId = self.filterData(self.getFirstItems())
+        """Asynchronously requests all user favorite posts from the API"""
+        with FuturesSession(max_workers=1) as session:
+            lastId = self.filterData(
+                services.getFirstItems(session, self.username, self.browser.ua, self.browser.cookies))
         try:
             while len(data.json()["items"]) > 0:
-                with FuturesSession(max_workers=4) as session:
-                    data = self.getItemsOlderThanX(session, lastId)
+                with FuturesSession(max_workers=1) as session:
+                    data = services.getItemsOlderThanX(
+                        session, lastId, self.username, self.browser.ua, self.browser.cookies)
                     if not data.status_code == requests.codes.ok:
                         raise Exception('Request rejected by server, please restart the program and try again.')
                     lastId = self.filterData(data)
@@ -46,34 +45,54 @@ class IdScraper:
             print('Service "IdScraper" finished. Thread destroyed.')
             return
 
-    def checkDifferentials(self, requestedData: requests.get, fileIn: any) -> int:
-        ids, imageNames = [[str(n["id"]) for n in requestedData], [str(n["image"]) for n in requestedData]]
-        logfileIds = [n.strip() for n in fileIn.readlines()]
-        differentialIds, differentialImgs = [[n for n, m in zip(ids, imageNames) if n not in logfileIds],
-                                             [m for n, m in zip(ids, imageNames) if n not in logfileIds]]
-        for imgNames in differentialImgs:
-            self.queue.put(imgNames)
-        with open("logfile.txt", "a") as fout:
-            for ids in differentialIds:
-                fout.write("{}{}".format(ids, "\n"))
-        return int(logfileIds[-1])
-
     async def getItemsNotInLog(self) -> None:
+        """Asynchronously requests all user favorite posts not already in the logfile"""
         with open("logfile.txt", "r+") as fin:
-            data = self.getFirstItems().json()["items"]
+            with FuturesSession(max_workers=1) as session:
+                data = services.getFirstItems(
+                    session, self.username, self.browser.ua, self.browser.cookies).json()["items"]
             lastId = self.checkDifferentials(data, fin)
             try:
-                with FuturesSession(max_workers=4) as session:
+                with FuturesSession(max_workers=1) as session:
                     while len(data.json()["items"]) > 0:
-                        data = self.getItemsOlderThanX(session, lastId)
+                        data = services.getItemsOlderThanX(
+                            session, lastId, self.username, self.browser.ua, self.browser.cookies)
                         lastId = self.checkDifferentials(data, fin)
             finally:
                 print('Service "IdScraper" finished. Thread destroyed.')
                 return
 
+    def filterData(self, data: requests.get) -> int:
+        """Filters data from requests into image names and ids and writes them into logfile"""
+        ids, imageNames = [[str(n["id"]) for n in data.json()["items"]],
+                           [n["image"] for n in data.json()["items"]]]
+        for images in imageNames:
+            self.queue.put(images)
+        self.writeLogfile(ids, imageNames)
+        return int(ids[-1])
 
-class DownloadWorker(Process):
-    def __init__(self, queue: any) -> None:
+    def checkDifferentials(self, requestedData: requests.get, fileIn: any) -> int:
+        """Compares requested data to data from existing logfile to find posts that still need to downloaded"""
+        ids, imageNames = [[str(n["id"]) for n in requestedData],
+                           [str(n["image"]) for n in requestedData]]
+        logfileIds = [n.split(":")[0].strip() for n in fileIn.readlines()]
+        differentialIds, differentialImgs = [[n for n, m in zip(ids, imageNames) if n not in logfileIds],
+                                             [m for n, m in zip(ids, imageNames) if n not in logfileIds]]
+        for imgNames in differentialImgs:
+            self.queue.put(imgNames)
+        self.writeLogfile(differentialIds, differentialImgs)
+        return int(logfileIds[-1])
+
+    @staticmethod
+    def writeLogfile(ids: list, imageNames: list) -> None:
+        """Write data to logfile"""
+        with open("logfile.txt", "a") as fout:
+            for thisId, thisImage in zip(ids, imageNames):
+                fout.write("{}:{}{}".format(thisId, thisImage, "\n"))
+
+
+class DownloadWorker(multiprocessing.Process):
+    def __init__(self, queue: multiprocessing.Queue) -> None:
         self.queue = queue
         super(DownloadWorker, self).__init__()
 
